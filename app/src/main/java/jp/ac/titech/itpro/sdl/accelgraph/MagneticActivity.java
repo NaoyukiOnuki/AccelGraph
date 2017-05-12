@@ -20,17 +20,15 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.Locale;
 
-public class MainActivity extends Activity implements SensorEventListener {
+public class MagneticActivity extends Activity implements SensorEventListener {
 
-    private final static String TAG = "MainActivity";
+    private final static String TAG = "MagneticActivity";
 
     private TextView rateView, accuracyView;
     private GraphView xView, yView, zView;
@@ -61,7 +59,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_magne);
 
         rateView = (TextView) findViewById(R.id.rate_view);
         accuracyView = (TextView) findViewById(R.id.accuracy_view);
@@ -70,16 +68,15 @@ public class MainActivity extends Activity implements SensorEventListener {
         zView = (GraphView) findViewById(R.id.z_view);
 
         sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
-        accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         if (accelerometer == null) {
-            Toast.makeText(this, getString(R.string.toast_no_accel_error),
+            Toast.makeText(this, getString(R.string.toast_no_magne_error),
                     Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
         handler = new Handler();
-
         startButton = (Button) findViewById(R.id.startButton);
         stopButton = (Button) findViewById(R.id.stopButton);
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -111,7 +108,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onPause() {
         super.onPause();
         Log.i(TAG, "onPause");
-        th = null;
         if (writer != null) writer.close();
         if (out != null) {
             try {
@@ -123,6 +119,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         writer = null;
         out = null;
         writing = false;
+        th = null;
         sensorMgr.unregisterListener(this);
     }
 
@@ -190,6 +187,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         Intent intent;
         switch (item.getItemId()) {
             case R.id.menu_accel:
+                intent = new Intent(getApplication(), MainActivity.class);
+                startActivity(intent);
                 return true;
             case R.id.menu_light:
                 intent = new Intent(getApplication(), LightActivity.class);
@@ -200,8 +199,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                 startActivity(intent);
                 return true;
             case R.id.menu_magne:
-                intent = new Intent(getApplication(), MagneticActivity.class);
-                startActivity(intent);
                 return true;
             case R.id.menu_Orientation:
                 intent = new Intent(getApplication(), OrientationActivity.class);
@@ -211,6 +208,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 return super.onOptionsItemSelected(item);
         }
     }
+
 
     private void checkExternalStoragePermission() {
         if (android.os.Build.VERSION.SDK_INT >= 23) {
@@ -227,7 +225,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     private void openExternalStorage() {
-        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.sensor_name_label) + ".txt";
+        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.magne_name_label) + ".txt";
         try {
             out = new FileOutputStream(path, false);
             writer = new PrintWriter(new OutputStreamWriter(out, "UTF-8"));

@@ -20,35 +20,37 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.Locale;
 
-public class MainActivity extends Activity implements SensorEventListener {
+/**
+ * Created by onuki on 2017/05/12.
+ */
 
-    private final static String TAG = "MainActivity";
+public class ProximityActivity extends Activity implements SensorEventListener {
+
+    private final static String TAG = "ProximityActivity";
 
     private TextView rateView, accuracyView;
-    private GraphView xView, yView, zView;
+    private GraphView graphView;
 
     private SensorManager sensorMgr;
-    private Sensor accelerometer;
+    private Sensor sensor;
 
     private final static long GRAPH_REFRESH_WAIT_MS = 20;
 
     private GraphRefreshThread th = null;
     private Handler handler;
 
-    private float vx, vy, vz;
+    private float v;
     private float rate;
     private int accuracy;
     private long prevts;
 
-    private final static float alpha = 0.75F;
+    private final static float alpha = 0F;
 
     Long startTime;
     private Button startButton, stopButton;
@@ -61,25 +63,22 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_proximity);
 
         rateView = (TextView) findViewById(R.id.rate_view);
         accuracyView = (TextView) findViewById(R.id.accuracy_view);
-        xView = (GraphView) findViewById(R.id.x_view);
-        yView = (GraphView) findViewById(R.id.y_view);
-        zView = (GraphView) findViewById(R.id.z_view);
+        graphView = (GraphView) findViewById(R.id.light_view);
 
         sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
-        accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        if (accelerometer == null) {
-            Toast.makeText(this, getString(R.string.toast_no_accel_error),
+        sensor = sensorMgr.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+        if (sensor == null) {
+            Toast.makeText(this, getString(R.string.toast_no_light_error),
                     Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
         handler = new Handler();
-
         startButton = (Button) findViewById(R.id.startButton);
         stopButton = (Button) findViewById(R.id.stopButton);
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -102,7 +101,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         super.onResume();
         Log.i(TAG, "onResume");
         startTime = System.currentTimeMillis();
-        sensorMgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorMgr.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST);
         th = new GraphRefreshThread();
         th.start();
     }
@@ -111,7 +110,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onPause() {
         super.onPause();
         Log.i(TAG, "onPause");
-        th = null;
         if (writer != null) writer.close();
         if (out != null) {
             try {
@@ -123,14 +121,13 @@ public class MainActivity extends Activity implements SensorEventListener {
         writer = null;
         out = null;
         writing = false;
+        th = null;
         sensorMgr.unregisterListener(this);
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        vx = alpha * vx + (1 - alpha) * event.values[0];
-        vy = alpha * vy + (1 - alpha) * event.values[1];
-        vz = alpha * vz + (1 - alpha) * event.values[2];
+        v = alpha * v + (1 - alpha) * event.values[0];
         rate = ((float) (event.timestamp - prevts)) / (1000 * 1000);
         prevts = event.timestamp;
     }
@@ -149,21 +146,18 @@ public class MainActivity extends Activity implements SensorEventListener {
                         public void run() {
                             rateView.setText(String.format(Locale.getDefault(), "%f", rate));
                             accuracyView.setText(String.format(Locale.getDefault(), "%d", accuracy));
-                            xView.addData(vx, true);
-                            yView.addData(vy, true);
-                            zView.addData(vz, true);
+                            graphView.addData(v, true);
                         }
                     });
                     if (writing && writer != null) {
                         Long now = System.currentTimeMillis() - startTime;
-                        String str = now/1000+"."+now%1000 + ": " + vx + " " + vy + " " + vz;
+                        String str = now/1000+"."+now%1000 + ": " + v;
                         writer.println(str);
                         writer.flush();
                     }
                     Thread.sleep(GRAPH_REFRESH_WAIT_MS);
                 }
-            }
-            catch (InterruptedException e) {
+            } catch (InterruptedException e) {
                 Log.e(TAG, e.toString());
                 th = null;
             }
@@ -190,14 +184,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         Intent intent;
         switch (item.getItemId()) {
             case R.id.menu_accel:
+                intent = new Intent(getApplication(), MainActivity.class);
+                startActivity(intent);
                 return true;
             case R.id.menu_light:
                 intent = new Intent(getApplication(), LightActivity.class);
                 startActivity(intent);
                 return true;
             case R.id.menu_proximity:
-                intent = new Intent(getApplication(), ProximityActivity.class);
-                startActivity(intent);
                 return true;
             case R.id.menu_magne:
                 intent = new Intent(getApplication(), MagneticActivity.class);
@@ -211,6 +205,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 return super.onOptionsItemSelected(item);
         }
     }
+
 
     private void checkExternalStoragePermission() {
         if (android.os.Build.VERSION.SDK_INT >= 23) {
@@ -227,7 +222,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     private void openExternalStorage() {
-        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.sensor_name_label) + ".txt";
+        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.proxi_name_label) + ".txt";
         try {
             out = new FileOutputStream(path, false);
             writer = new PrintWriter(new OutputStreamWriter(out, "UTF-8"));

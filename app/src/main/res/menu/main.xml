@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/menu_accel"
+        android:orderInCategory="101"
+        android:title="@string/menu_accel"/>
+    <item
+        android:id="@+id/menu_light"
+        android:orderInCategory="102"
+        android:title="@string/menu_light"/>
+    <item
+        android:id="@+id/menu_proximity"
+        android:orderInCategory="103"
+        android:title="@string/menu_proximity"/>
+    <item
+        android:id="@+id/menu_magne"
+        android:orderInCategory="104"
+        android:title="@string/menu_magne"/>
+    <item
+        android:id="@+id/menu_Orientation"
+        android:orderInCategory="104"
+        android:title="@string/menu_Orientation"/>
+
+</menu>

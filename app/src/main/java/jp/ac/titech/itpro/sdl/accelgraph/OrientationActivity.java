@@ -20,29 +20,31 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.Locale;
 
-public class MainActivity extends Activity implements SensorEventListener {
+public class OrientationActivity extends Activity implements SensorEventListener {
 
-    private final static String TAG = "MainActivity";
+    private final static String TAG = "OrientationActivity";
 
     private TextView rateView, accuracyView;
     private GraphView xView, yView, zView;
 
     private SensorManager sensorMgr;
     private Sensor accelerometer;
+    private Sensor magneSensor;
 
     private final static long GRAPH_REFRESH_WAIT_MS = 20;
 
     private GraphRefreshThread th = null;
     private Handler handler;
 
+    private float[] accel = new float[3];
+    private float[] magnetic = new float[3];
+    private float[] attitude = new float[3];
     private float vx, vy, vz;
     private float rate;
     private int accuracy;
@@ -71,8 +73,15 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
         accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magneSensor = sensorMgr.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         if (accelerometer == null) {
             Toast.makeText(this, getString(R.string.toast_no_accel_error),
+                    Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        if (magneSensor == null) {
+            Toast.makeText(this, getString(R.string.toast_no_magne_error),
                     Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -103,6 +112,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         Log.i(TAG, "onResume");
         startTime = System.currentTimeMillis();
         sensorMgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorMgr.registerListener(this, magneSensor, SensorManager.SENSOR_DELAY_FASTEST);
         th = new GraphRefreshThread();
         th.start();
     }
@@ -128,9 +138,24 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        vx = alpha * vx + (1 - alpha) * event.values[0];
-        vy = alpha * vy + (1 - alpha) * event.values[1];
-        vz = alpha * vz + (1 - alpha) * event.values[2];
+        switch (event.sensor.getType()) {
+            case Sensor.TYPE_MAGNETIC_FIELD:
+                magnetic = event.values.clone();
+                break;
+            case Sensor.TYPE_ACCELEROMETER:
+                accel = event.values.clone();
+                break;
+        }
+        if (magnetic != null && accel != null) {
+            float[] in = new float[9];
+            float[] out = new float[9];
+            SensorManager.getRotationMatrix( in, null, accel, magnetic);
+            SensorManager.remapCoordinateSystem(in, SensorManager.AXIS_X, SensorManager.AXIS_Y, out);
+            SensorManager.getOrientation(out, attitude);
+        }
+        vx = alpha * vx + (1 - alpha) * attitude[1];
+        vy = alpha * vy + (1 - alpha) * attitude[2];
+        vz = alpha * vz + (1 - alpha) * attitude[0];
         rate = ((float) (event.timestamp - prevts)) / (1000 * 1000);
         prevts = event.timestamp;
     }
@@ -149,9 +174,10 @@ public class MainActivity extends Activity implements SensorEventListener {
                         public void run() {
                             rateView.setText(String.format(Locale.getDefault(), "%f", rate));
                             accuracyView.setText(String.format(Locale.getDefault(), "%d", accuracy));
-                            xView.addData(vx, true);
-                            yView.addData(vy, true);
-                            zView.addData(vz, true);
+                            xView.addData(vx*20/(float)Math.PI, true);
+                            yView.addData(vy*20/(float)Math.PI, true);
+                            zView.addData(vz*20/(float)Math.PI, true);
+
                         }
                     });
                     if (writing && writer != null) {
@@ -190,6 +216,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         Intent intent;
         switch (item.getItemId()) {
             case R.id.menu_accel:
+                intent = new Intent(getApplication(), MainActivity.class);
+                startActivity(intent);
                 return true;
             case R.id.menu_light:
                 intent = new Intent(getApplication(), LightActivity.class);
@@ -204,8 +232,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                 startActivity(intent);
                 return true;
             case R.id.menu_Orientation:
-                intent = new Intent(getApplication(), OrientationActivity.class);
-                startActivity(intent);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -227,7 +253,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     private void openExternalStorage() {
-        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.sensor_name_label) + ".txt";
+        String path = Environment.getExternalStorageDirectory().getPath() + "/" + getString(R.string.orientation_name_label) + ".txt";
         try {
             out = new FileOutputStream(path, false);
             writer = new PrintWriter(new OutputStreamWriter(out, "UTF-8"));
